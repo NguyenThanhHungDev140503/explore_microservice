@@ -191,6 +191,23 @@ graph LR
 | **Memory** | Higher | Lower |
 | **Connections** | Thread-bound | Connection pooling |
 
+### Tại sao lại có 2 phiên bản Zuul? (Giải thích chi tiết)
+
+Việc Netflix phát triển và chuyển đổi từ **Zuul 1** sang **Zuul 2** là để giải quyết bài toán về **Hiệu năng (Performance)** và **Khả năng mở rộng (Scalability)**.
+
+**1. Vấn đề của Zuul 1 (Blocking I/O)**
+Zuul 1 được xây dựng dựa trên **Servlet API** cũ, sử dụng mô hình **Blocking I/O**.
+*   **Cơ chế:** Mỗi request từ người dùng sẽ chiếm dụng (block) một thread (luồng) riêng biệt của server cho đến khi xử lý xong (bao gồm cả thời gian chờ backend service trả lời).
+*   **Hạn chế:** Nếu backend xử lý chậm hoặc mạng lag, thread đó bị treo. Khi số lượng request quá lớn (hàng triệu RPM), server sẽ hết sạch thread pool để phục vụ request mới -> **Nghẽn cổ chai**.
+*   **Hiệu năng:** Chỉ xử lý được khoảng **~1,000 RPS** (Request Per Second) trên một node.
+
+**2. Giải pháp của Zuul 2 (Non-Blocking I/O)**
+Zuul 2 được viết lại hoàn toàn dựa trên **Netty**, sử dụng mô hình **Non-blocking / Async I/O**.
+*   **Cơ chế:** Sử dụng một số ít thread (Event Loop) để nhận request. Khi cần gọi backend, nó gửi tín hiệu rồi giải phóng thread đi làm việc khác. Khi backend trả lời, nó sẽ "gọi lại" (callback) để xử lý tiếp.
+*   **Lợi ích:** Một thread có thể xử lý hàng nghìn kết nối đồng thời (tương tự như cách Node.js hay Nginx hoạt động).
+*   **Kết nối dài:** Hỗ trợ tốt hơn cho **Persistent Connections** (WebSockets, SSE) và các thiết bị di động có kết nối chập chờn.
+*   **Hiệu năng:** Tăng vọt lên **~10,000+ RPS** trên một node (gấp 10 lần Zuul 1).
+
 ### 3.3. Authentication Service
 
 Xử lý xác thực và phân quyền cho tất cả requests:
